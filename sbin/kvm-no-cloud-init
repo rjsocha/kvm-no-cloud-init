@@ -3,7 +3,10 @@
 # by Robert Socha
 # 2021, Public Domain
 #
+
 set -eE
+
+SSH_KEY_TYPES="rsa ed25519 ecdsa dsa"
 
 _trap_error() {
 local _frame=0 LINE SUB FILE
@@ -94,8 +97,64 @@ local _url=$1
   then
     echo -n "DNS: "
     wget -q -O - http://${_url}/$(hostname)
+  else
+    echo "error: no http client found - unable to register DNS name"
   fi
 }
+
+# Regenerate only existing keys
+_regenerate_ssh_host_keys() {
+local _key _type
+  for _type in ${SSH_KEY_TYPES}
+  do
+    _key="/etc/ssh/ssh_host_${_type}_key"
+    if [[ -f ${_key} ]]
+    then
+      if rm -f "${_key}" &>/dev/null
+      then
+        echo "Regenerating SSH host key ${_key} ..."
+        ssh-keygen -q -f "${_key}" -N '' -t "${_type}"
+      else
+        echo "unable to regenerate the SSH host key ${_key}"
+      fi
+    fi
+  done
+}
+
+# Generate all keys
+_generate_ssh_host_keys() {
+local _key _type
+  for _type in ${SSH_KEY_TYPES}
+  do
+    _key="/etc/ssh/ssh_host_${_type}_key"
+    if [[ -f ${_key} ]]
+    then
+      rm -f "${_key}" &>/dev/null
+    fi
+    echo "Generating SSH host key ${_key} ..."
+    ssh-keygen -q -f "${_key}" -N '' -t "${_type}"
+  done
+}
+
+# Regenerate only existing keys
+_regenerate_ssh_host_keys() {
+local _key _type
+  for _type in ${SSH_KEY_TYPES}
+  do
+    _key="/etc/ssh/ssh_host_${_type}_key"
+    if [[ -f ${_key} ]]
+    then
+      if rm -f "${_key}" &>/dev/null
+      then
+        echo "Regenerating SSH host key ${_key} ..."
+        ssh-keygen -q -f "${_key}" -N '' -t "${_type}"
+      else
+        echo "unable to renegerate the SSH host key ${_key}"
+      fi
+    fi
+  done
+}
+
 
 _process_config() {
 local _in=$1 _data _d _var _v
@@ -120,6 +179,12 @@ local _in=$1 _data _d _var _v
         ;;
       dns-registry)
         _process_dns_registry "${_v}"
+        ;;
+      regenerate-ssh-host-keys)
+        _regenerate_ssh_host_keys
+        ;;
+      generate-ssh-host-keys)
+        _generate_ssh_host_keys
         ;;
     esac
   done
