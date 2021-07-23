@@ -1,0 +1,8 @@
+Package: kvm-no-cloud-init
+Version: 1.1
+Architecture: all
+Maintainer: Robert Socha <socha@socha.it>
+Depends: dmidecode, curl | wget | aria2
+Section: admin
+Priority: optional
+Description: simple cloud-init replecment for local kvm/qemu vm's

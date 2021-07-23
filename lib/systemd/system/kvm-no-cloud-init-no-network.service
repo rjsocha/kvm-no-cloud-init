@@ -1,0 +1,12 @@
+[Unit]
+Description=VM setup script - before network
+Before=network-pre.target 
+Wants=network-pre.target
+
+[Service]
+ExecStart=/sbin/kvm-no-cloud-init no-network
+Type=oneshot
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

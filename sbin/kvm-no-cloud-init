@@ -1,0 +1,184 @@
+#!/bin/bash
+# kvm/qemu guest configuration support via SMBIOS OEM strings...
+# by Robert Socha
+# 2021, Public Domain
+#
+set -eE
+
+_trap_error() {
+local _frame=0 LINE SUB FILE
+  while read LINE SUB FILE < <(caller "${_frame}")
+  do
+    if [[ ${_frame} -eq 0 ]]
+    then
+      printf "%s @ %s return code was %s\n" "${SUB}" "${LINE}" "$1" || true
+    else
+      printf "%-${_frame}s%s @ %s\n" "" "${SUB}" "${LINE}" || true
+    fi
+    ((_frame++)) || true
+  done
+}
+
+_process_name() {
+  echo "Setting the hostname to: $1"
+  /usr/bin/hostnamectl set-hostname "$1"
+  sed -i -e "s/template/$1/g" /etc/hosts
+}
+
+_process_ssh() {
+local _ssh=$1 _user _key _u _home
+  # user@key
+  if [[ ${_ssh} =~ @ ]]
+  then
+    _user=${_ssh%%@*}
+    _key=${_ssh##*@}
+  else
+    _user="root"
+    _key="$_ssh"
+  fi
+  _key=$(echo -n "${_key}" | base64 -d)
+  for _u in ${_user//,/ }
+  do
+    if getent passwd "${_u}" &>/dev/null
+    then
+      echo "Setting up ssh key for ${_u}"
+      _home=$(eval echo ~${_u})
+      if ! [[ -d ${_home}/.ssh ]]
+      then
+        echo "Creating ${_home}/.ssh directory"
+        mkdir -p -m 0700 "${_home}/.ssh"
+        chown "${_u}:${_u}" "${_home}/.ssh"
+      fi
+      echo "${_key}" >"${_home}/.ssh/authorized_keys"
+      chmod 0600 "${_home}/.ssh/authorized_keys"
+      chown "${_u}:${_u}" "${_home}/.ssh/authorized_keys"
+
+    fi
+  done
+
+}
+
+_process_user() {
+local _user=$1 _pass
+  # user[@password]
+  _pass=""
+  if [[ ${_user} =~ @ ]]
+  then
+    _pass=$(echo -n "${_user##*@}" | base64 -d)
+    _user=${_user%%@*}
+  fi
+  if ! getent passwd "${_user}" &>/dev/null
+  then
+    useradd -m -s /bin/bash "${_user}"
+  fi
+  [[ -n ${_pass} ]] && echo -n "${_user}:${_pass}" | chpasswd --encrypted
+}
+
+_process_group() {
+local _entry=$1 _user _group
+  if [[ ${_entry} =~ @ ]]
+  then
+    _user=${_entry%%@*}
+    _group=${_entry##*@}
+    gpasswd -a "${_user}" "${_group}"
+  fi
+}
+
+_process_dns_registry() {
+local _url=$1
+  if command -v curl &>/dev/null
+  then
+    echo -n "DNS: "
+    curl -sf http://${_url}/$(hostname)
+  elif command -v wget &>/dev/null
+  then
+    echo -n "DNS: "
+    wget -q http://${_url}/$(hostname)
+  fi
+}
+
+_process_config() {
+local _in=$1 _data _d _var _v
+  [[ -n ${_in} ]] || return 1
+  IFS='!' read -r -a _data <<< "${_in}"
+  for _d in ${_data[@]}
+  do
+    # requires r/w fs
+    IFS=":" read -r _var _v <<< "${_d}"
+    case ${_var} in
+      name)
+        _process_name "${_v}"
+        ;;
+      ssh)
+        _process_ssh "${_v}"
+        ;;
+      user)
+        _process_user "${_v}"
+        ;;
+      group)
+        _process_group "${_v}"
+        ;;
+      dns-registry)
+        _process_dns_registry "${_v}"
+        ;;
+    esac
+  done
+}
+
+_configure_instance() {
+local _mode="$1"
+  _check_deps
+  if dmidecode --oem-string count &>/dev/null
+  then
+    _count=$(dmidecode --oem-string count)
+    if [[ ${_count} =~ ^[0-9]+$ ]]
+    then
+      for _n in $(seq 1 ${_count})
+      do
+        _string=$(dmidecode --oem-string ${_n})
+        case "${_mode}" in
+          no-network)
+            if [[ ${_string} =~ ^kvm-cnf-no-net! ]]
+            then
+              _process_config "${_string:15}"
+              systemctl disable kvm-no-cloud-init-no-network.service
+              break
+            fi
+            ;;
+          network)
+            if [[ ${_string} =~ ^kvm-cnf-net! ]]
+            then
+              _process_config "${_string:12}"
+              systemctl disable kvm-no-cloud-init-network.service
+              break
+            fi
+            ;;
+        esac
+      done
+    fi
+  fi
+}
+
+_check_deps() {
+  if ! command -v dmidecode &>/dev/null
+  then
+    echo "error: missing dmidecode"
+    exit 1
+  fi
+}
+
+_main() {
+  case "${1,,}" in
+    network)
+      _configure_instance network
+      ;;
+    no-network)
+      _configure_instance no-network
+      ;;
+  esac
+}
+
+trap '_trap_error $?' ERR
+_main "$@"
+exit 0
+# vim: set tabstop=2 shiftwidth=2 expandtab autoindent nosmartindent :

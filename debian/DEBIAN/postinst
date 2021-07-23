@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -e
+
+case "${1}" in
+    abort-upgrade|abort-remove|abort-deconfigure|configure)
+
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`${1}'" >&2
+        exit 1
+        ;;
+esac
+
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		#systemctl enable kvm-no-cloud-init-no-network.service
+		#systemctl enable kvm-no-cloud-init-network.service
+	fi
+fi
+exit 0
