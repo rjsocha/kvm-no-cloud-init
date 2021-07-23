@@ -1,5 +1,5 @@
 Package: kvm-no-cloud-init
-Version: 1.21
+Version: 1.22
 Architecture: all
 Maintainer: Robert Socha <socha@socha.it>
 Depends: dmidecode, curl | wget | aria2

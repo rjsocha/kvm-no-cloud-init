@@ -1,10 +1,10 @@
 [Unit]
-Description=VM setup script - before network
+Description=KVM quest configuration - no network stage
 Before=network-pre.target 
 Wants=network-pre.target
 
 [Service]
-ExecStart=/sbin/kvm-no-cloud-init no-network
+ExecStart=/sbin/kvm-no-cloud-init start no-network
 Type=oneshot
 RemainAfterExit=no
 

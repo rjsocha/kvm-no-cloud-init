@@ -1,8 +1,7 @@
 #!/bin/bash
 # kvm/qemu guest configuration support via SMBIOS OEM strings...
-# by Robert Socha
-# 2021, Public Domain
-#
+# by Robert Socha, 2021
+# Public Domain
 
 set -eE
 
@@ -23,9 +22,10 @@ local _frame=0 LINE SUB FILE
 }
 
 _process_name() {
-  echo "Setting the hostname to: $1"
-  /usr/bin/hostnamectl set-hostname "$1"
-  sed -i -e "s/template/$1/g" /etc/hosts
+local _hostname="${1}"
+  echo "Setting the hostname to: ${_hostname}"
+  /usr/bin/hostnamectl set-hostname "${_hostname}"
+  sed -i -e "s/template/${_hostname}/g" /etc/hosts || true
 }
 
 _process_ssh() {
@@ -55,10 +55,8 @@ local _ssh=$1 _user _key _u _home
       echo "${_key}" >"${_home}/.ssh/authorized_keys"
       chmod 0600 "${_home}/.ssh/authorized_keys"
       chown "${_u}:${_u}" "${_home}/.ssh/authorized_keys"
-
     fi
   done
-
 }
 
 _process_user() {
@@ -86,19 +84,42 @@ local _entry=$1 _user _group
     gpasswd -a "${_user}" "${_group}"
   fi
 }
+# well, Debian sucks? ;)
+_make_sure_network_is_online() {
+local _c=1
+  while [[ -z "$(ip route show default)" ]] && [[ ${_c} -le 250 ]]
+  do
+    sleep 0.1
+    ((_c++))
+  done
+}
 
-_process_dns_registry() {
-local _url=$1 _me
-  _me="$(hostname)"
+_http_get() {
+local _url="${1}"
+  _make_sure_network_is_online
   if command -v curl &>/dev/null
   then
-    echo -n "DNS: $(curl -sf http://${_url}/${_me})"
+    curl -sf "${_url}" || true
   elif command -v wget &>/dev/null
   then
-    echo -n "DNS: $(wget -q -O - http://${_url}/${_me})"
+    wget -q -O - "${_url}" || true
   else
-    echo "error: no http client found - unable to register DNS name"
+    echo "no http client found - unable to register DNS name"
   fi
+}
+
+_process_dns_registry() {
+local _url=$1 _me _resp
+  _me="$(hostname)"
+  _resp=$(_http_get "http://${_url}/${_me}")
+  echo "DNS: ${_resp}"
+}
+
+_process_dns_un_registry() {
+local _url=$1 _me _resp
+  _me="-$(hostname)"
+  _resp=$(_http_get "http://${_url}/${_me}")
+  echo "DNS: ${_resp}"
 }
 
 # Regenerate only existing keys
@@ -155,7 +176,7 @@ local _key _type
 }
 
 
-_process_config() {
+_process_config_start() {
 local _in=$1 _data _d _var _v
   [[ -n ${_in} ]] || return 1
   IFS='!' read -r -a _data <<< "${_in}"
@@ -165,7 +186,10 @@ local _in=$1 _data _d _var _v
     IFS=":" read -r _var _v <<< "${_d}"
     case ${_var} in
       name)
-        _process_name "${_v}"
+        if [[ -n "${_v}" ]]
+        then
+          _process_name "${_v}"
+        fi
         ;;
       ssh)
         _process_ssh "${_v}"
@@ -189,6 +213,22 @@ local _in=$1 _data _d _var _v
   done
 }
 
+_process_config_stop() {
+local _in=$1 _data _d _var _v
+  [[ -n ${_in} ]] || return 1
+  IFS='!' read -r -a _data <<< "${_in}"
+  for _d in ${_data[@]}
+  do
+    # requires r/w fs
+    IFS=":" read -r _var _v <<< "${_d}"
+    case ${_var} in
+      dns-registry)
+        _process_dns_un_registry "${_v}"
+        ;;
+    esac
+  done
+}
+
 _configure_instance() {
 local _mode="$1"
   _check_deps
@@ -204,7 +244,7 @@ local _mode="$1"
           no-network)
             if [[ ${_string} =~ ^kvm-cnf-no-net! ]]
             then
-              _process_config "${_string:15}"
+              _process_config_start "${_string:15}"
               systemctl disable kvm-no-cloud-init-no-network.service
               break
             fi
@@ -212,8 +252,33 @@ local _mode="$1"
           network)
             if [[ ${_string} =~ ^kvm-cnf-net! ]]
             then
-              _process_config "${_string:12}"
-              systemctl disable kvm-no-cloud-init-network.service
+              _process_config_start "${_string:12}"
+              break
+            fi
+            ;;
+        esac
+      done
+    fi
+  fi
+}
+
+_deconfigure_instance() {
+local _mode="$1"
+echo "buu $@"
+  _check_deps
+  if dmidecode --oem-string count &>/dev/null
+  then
+    _count=$(dmidecode --oem-string count)
+    if [[ ${_count} =~ ^[0-9]+$ ]]
+    then
+      for _n in $(seq 1 ${_count})
+      do
+        _string=$(dmidecode --oem-string ${_n})
+        case "${_mode}" in
+          network)
+            if [[ ${_string} =~ ^kvm-cnf-net! ]]
+            then
+              _process_config_stop "${_string:12}"
               break
             fi
             ;;
@@ -232,12 +297,26 @@ _check_deps() {
 }
 
 _main() {
+local _action
   case "${1,,}" in
-    network)
-      _configure_instance network
+    start)
+      shift
+      case "${1,,}" in
+        network)
+          _configure_instance network
+        ;;
+        no-network)
+          _configure_instance no-network
+        ;;
+      esac
       ;;
-    no-network)
-      _configure_instance no-network
+    stop)
+      shift
+      case "${1,,}" in
+        network)
+          _deconfigure_instance network
+        ;;
+      esac
       ;;
   esac
 }

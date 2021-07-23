@@ -1,12 +1,14 @@
 [Unit]
-Description=VM setup script - after network
+Description=KVM quest configuration - network stage
 After=network-online.target
 Wants=network-online.target
+After=network.target
 
 [Service]
-ExecStart=/sbin/kvm-no-cloud-init network
+ExecStart=/sbin/kvm-no-cloud-init start network
+ExecStop=/sbin/kvm-no-cloud-init stop network
 Type=oneshot
-RemainAfterExit=no
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
