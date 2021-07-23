@@ -88,15 +88,14 @@ local _entry=$1 _user _group
 }
 
 _process_dns_registry() {
-local _url=$1
+local _url=$1 _me
+  _me="$(hostname)"
   if command -v curl &>/dev/null
   then
-    echo -n "DNS: "
-    curl -sf http://${_url}/$(hostname)
+    echo -n "DNS: $(curl -sf http://${_url}/${_me})"
   elif command -v wget &>/dev/null
   then
-    echo -n "DNS: "
-    wget -q -O - http://${_url}/$(hostname)
+    echo -n "DNS: $(wget -q -O - http://${_url}/${_me})"
   else
     echo "error: no http client found - unable to register DNS name"
   fi
