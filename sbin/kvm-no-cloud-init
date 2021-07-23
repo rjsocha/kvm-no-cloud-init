@@ -93,7 +93,7 @@ local _url=$1
   elif command -v wget &>/dev/null
   then
     echo -n "DNS: "
-    wget -q http://${_url}/$(hostname)
+    wget -q -O - http://${_url}/$(hostname)
   fi
 }
 
