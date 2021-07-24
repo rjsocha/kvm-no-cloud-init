@@ -81,7 +81,10 @@ local _entry=$1 _user _group
   then
     _user=${_entry%%@*}
     _group=${_entry##*@}
-    gpasswd -a "${_user}" "${_group}"
+    if getent group "${_group}" &>/dev/null
+    then
+      gpasswd -a "${_user}" "${_group}"
+    fi
   fi
 }
 # well, Debian sucks? ;)
@@ -174,7 +177,6 @@ local _key _type
     fi
   done
 }
-
 
 _process_config_start() {
 local _in=$1 _data _d _var _v
