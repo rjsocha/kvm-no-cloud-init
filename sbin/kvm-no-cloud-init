@@ -87,6 +87,7 @@ local _entry=$1 _user _group
     fi
   fi
 }
+
 # well, Debian sucks? ;)
 _make_sure_network_is_online() {
 local _c=1
@@ -102,27 +103,46 @@ local _url="${1}"
   _make_sure_network_is_online
   if command -v curl &>/dev/null
   then
-    curl -sf "${_url}" || true
+    curl -m 5 -sf "${_url}"
   elif command -v wget &>/dev/null
   then
-    wget -q -O - "${_url}" || true
+    wget -q -T 5 -O - "${_url}"
   else
     echo "no http client found - unable to register DNS name"
   fi
 }
 
 _process_dns_registry() {
-local _url=$1 _me _resp
+local _url=$1 _me _resp _cnt=1
   _me="$(hostname)"
-  _resp=$(_http_get "http://${_url}/${_me}")
-  echo "DNS: ${_resp}"
+  while true
+  do
+    if _resp=$(_http_get "http://${_url}/${_me}")
+    then
+      echo "DNS: ${_resp}"
+      break
+    else
+      if [[ $cnt -gt 5 ]]
+      then
+        echo "DNS: registration failed"
+        break
+      else
+        ((cnt++))
+        sleep 0.25
+      fi
+    fi
+  done
 }
 
 _process_dns_un_registry() {
 local _url=$1 _me _resp
   _me="-$(hostname)"
-  _resp=$(_http_get "http://${_url}/${_me}")
-  echo "DNS: ${_resp}"
+  if _resp=$(_http_get "http://${_url}/${_me}")
+  then
+    echo "DNS: ${_resp}"
+  else
+    echo "DNS: fail"
+  fi
 }
 
 # Regenerate only existing keys
