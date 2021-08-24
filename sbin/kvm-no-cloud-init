@@ -94,7 +94,7 @@ local _c=1
   while [[ -z "$(ip route show default)" ]] && [[ ${_c} -le 250 ]]
   do
     sleep 0.1
-    ((_c++))
+    ((_c++)) || true
   done
 }
 
@@ -103,10 +103,10 @@ local _url="${1}"
   _make_sure_network_is_online
   if command -v curl &>/dev/null
   then
-    curl -m 5 -sf "${_url}"
+    curl -m 3 -sf "${_url}"
   elif command -v wget &>/dev/null
   then
-    wget -q -T 5 -O - "${_url}"
+    wget -q -T 3 -O - "${_url}"
   else
     echo "no http client found - unable to register DNS name"
   fi
@@ -122,13 +122,14 @@ local _url=$1 _me _resp _cnt=1
       echo "DNS: ${_resp}"
       break
     else
-      if [[ $cnt -gt 5 ]]
+      if [[ ${_cnt} -gt 5 ]]
       then
         echo "DNS: registration failed"
         break
       else
-        ((cnt++))
-        sleep 0.25
+        echo "DNS registration retry: ${_cnt}"
+        ((_cnt++)) || true
+        sleep 0.5
       fi
     fi
   done
