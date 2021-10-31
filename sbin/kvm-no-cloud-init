@@ -7,6 +7,25 @@ set -eE
 
 SSH_KEY_TYPES="rsa ed25519 ecdsa dsa"
 
+_oem_string_count() {
+  if LANG=C dmidecode --oem-string count 2>&1  | fgrep -q "unrecognized option"
+  then
+    dmidecode -t 11 -q | egrep -c 'String [0-9]+: '
+  else
+    dmidecode --oem-string count
+  fi
+}
+
+_oem_string_get() {
+local _number="$1"
+  if LANG=C dmidecode --oem-string count 2>&1  | fgrep -q "unrecognized option"
+  then
+    dmidecode -t 11 -q | grep -oP "(?<=String ${_number}: ).+"
+  else
+    dmidecode --oem-string "${_number}"
+  fi
+}
+
 _trap_error() {
 local _frame=0 LINE SUB FILE
   while read LINE SUB FILE < <(caller "${_frame}")
@@ -253,16 +272,16 @@ local _in=$1 _data _d _var _v
 }
 
 _configure_instance() {
-local _mode="$1"
+local _mode="$1" _count _string
   _check_deps
-  if dmidecode --oem-string count &>/dev/null
+  if _oem_string_count &>/dev/null
   then
-    _count=$(dmidecode --oem-string count)
+    _count=$(_oem_string_count)
     if [[ ${_count} =~ ^[0-9]+$ ]]
     then
       for _n in $(seq 1 ${_count})
       do
-        _string=$(dmidecode --oem-string ${_n})
+        _string=$(_oem_string_get ${_n})
         case "${_mode}" in
           no-network)
             if [[ ${_string} =~ ^kvm-cnf-no-net! ]]
@@ -286,17 +305,16 @@ local _mode="$1"
 }
 
 _deconfigure_instance() {
-local _mode="$1"
-echo "buu $@"
+local _mode="$1" _count _string
   _check_deps
-  if dmidecode --oem-string count &>/dev/null
+  if _oem_string_count &>/dev/null
   then
-    _count=$(dmidecode --oem-string count)
+    _count=$(_oem_string_count)
     if [[ ${_count} =~ ^[0-9]+$ ]]
     then
       for _n in $(seq 1 ${_count})
       do
-        _string=$(dmidecode --oem-string ${_n})
+        _string=$(_oem_string_get ${_n})
         case "${_mode}" in
           network)
             if [[ ${_string} =~ ^kvm-cnf-net! ]]
