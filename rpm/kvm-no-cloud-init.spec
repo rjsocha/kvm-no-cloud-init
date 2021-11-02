@@ -3,7 +3,7 @@
 
 Name:      kvm-no-cloud-init
 Version:   1.26
-Release:   1%{?dist}
+Release:   1
 Vendor:    socha.it
 Summary:   Simple cloud-init like script.
 Group:     System
