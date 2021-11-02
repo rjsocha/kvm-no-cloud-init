@@ -2,7 +2,7 @@
 %define _rpmdir %{expand:%%(pwd)}/..
 
 Name:      kvm-no-cloud-init
-Version:   1.25
+Version:   1.26
 Release:   1%{?dist}
 Vendor:    socha.it
 Summary:   Simple cloud-init like script.
