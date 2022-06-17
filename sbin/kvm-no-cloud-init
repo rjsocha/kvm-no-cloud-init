@@ -45,6 +45,11 @@ local _hostname="${1}"
   echo "Setting the hostname to: ${_hostname}"
   /usr/bin/hostnamectl set-hostname "${_hostname}"
   sed -i -e "s/template/${_hostname}/g" /etc/hosts || true
+  if /bin/systemctl is-active --quiet rsyslog.service
+  then
+    echo "Restarting rsyslog.service..."
+    /bin/systemctl reload-or-restart rsyslog.service
+  fi
 }
 
 _process_ssh() {
