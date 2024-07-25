@@ -69,16 +69,21 @@ local _ssh=$1 _user _key _u _home
     if getent passwd "${_u}" &>/dev/null
     then
       echo "Setting up ssh key for ${_u}"
-      _home=$(eval echo ~${_u})
-      if ! [[ -d ${_home}/.ssh ]]
-      then
-        echo "Creating ${_home}/.ssh directory"
-        mkdir -p -m 0700 "${_home}/.ssh"
-        chown "${_u}:${_u}" "${_home}/.ssh"
+      if [[ -d /etc/ssh-pool ]]; then
+        echo "${_key}" >"/etc/ssh-pool/${_u}"
+        chmod 0644 "/etc/ssh-pool/${_u}"
+      else
+        _home=$(eval echo ~${_u})
+        if ! [[ -d ${_home}/.ssh ]]
+        then
+          echo "Creating ${_home}/.ssh directory"
+          mkdir -p -m 0700 "${_home}/.ssh"
+          chown "${_u}:${_u}" "${_home}/.ssh"
+        fi
+        echo "${_key}" >"${_home}/.ssh/authorized_keys"
+        chmod 0600 "${_home}/.ssh/authorized_keys"
+        chown "${_u}:${_u}" "${_home}/.ssh/authorized_keys"
       fi
-      echo "${_key}" >"${_home}/.ssh/authorized_keys"
-      chmod 0600 "${_home}/.ssh/authorized_keys"
-      chown "${_u}:${_u}" "${_home}/.ssh/authorized_keys"
     fi
   done
 }
